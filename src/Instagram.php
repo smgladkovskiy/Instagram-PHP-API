@@ -39,7 +39,7 @@ class Instagram
      *
      * @var int
      */
-    protected $httpCode;
+    private $httpCode;
 
     /**
      * The Instagram API Key.
@@ -107,7 +107,7 @@ class Instagram
     /**
      * Default constructor.
      *
-     * @param array|string $config Instagram configuration data
+     * @param array $config Instagram configuration data
      *
      * @throws InstagramException
      */
@@ -118,12 +118,10 @@ class Instagram
             $this->setApiKey($config['apiKey']);
             $this->setApiSecret($config['apiSecret']);
             $this->setApiCallback($config['apiCallback']);
+
             if ( ! empty($config['curlRetries']) and is_int($config['curlRetries'])) {
                 $this->curlRetries = $config['curlRetries'];
             }
-        } elseif (is_string($config)) {
-            // if you only want to access public data
-            $this->setApiKey($config);
         } else {
             throw new InstagramException('Error: __construct() - Configuration data is missing.');
         }
@@ -132,7 +130,7 @@ class Instagram
     /**
      * Generates the OAuth login URL.
      *
-     * @param string[] $scopes Requesting additional permissions
+     * @param array $scopes Requesting additional permissions
      *
      * @return string Instagram OAuth login URL
      *
@@ -214,105 +212,7 @@ class Instagram
     {
         $params = array_merge($params, ['q' => $name]);
 
-        return $this->makeCall('users/search', $params);
-    }
-
-    /**
-     * The call operator.
-     *
-     * @param string $function API resource path
-     * @param array  $params   Request parameters
-     * @param string $method   Request type GET|POST
-     *
-     * @return mixed
-     * @throws CurlException
-     * @throws InstagramException
-     */
-    private function makeCall($function, $params = null, $method = 'GET')
-    {
-        $ApiCallQuery = [];
-
-        // All calls needs an authenticated user
-        if ( ! isset($this->accessToken)) {
-            throw new InstagramException("Error: makeCall() | $function - This method requires an authenticated users access token."
-            );
-        }
-        $authMethod = ['access_token' => $this->getAccessToken()];
-
-        $ApiCallQuery += $authMethod;
-
-        $paramsQuery = null;
-        if (isset($params) and is_array($params)) {
-            $paramsQuery = http_build_query($params);
-            $ApiCallQuery += $paramsQuery;
-        }
-
-        if ($this->signedHeader) {
-            $ApiCallQuery += ['sig' => $this->getHeaderSignature($function, $authMethod, $params)];
-        }
-
-        $apiCall = self::API_URL . $function . '?' . http_build_query($ApiCallQuery);
-
-        // we want JSON
-        $headerData = ['Accept: application/json'];
-
-        $connCount = 0;
-        do {
-            $connCount++;
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $apiCall);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headerData);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 90);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_HEADER, true);
-
-            switch ($method) {
-                case 'POST':
-                    curl_setopt($ch, CURLOPT_POST, count($params));
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, $paramsQuery);
-                    break;
-                case 'DELETE':
-                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
-                    break;
-            }
-
-            $jsonData = curl_exec($ch);
-        } while (curl_errno($ch) and $connCount <= $this->curlRetries);
-
-        if (curl_errno($ch) === CURLE_OK) {
-            curl_close($ch);
-
-            // split header from JSON data
-            // and assign each to a variable
-            list($headerContent, $jsonData) = explode("\r\n\r\n", $jsonData, 2);
-
-            // convert header content into an array
-            $headers = $this->processHeaders($headerContent);
-
-            // get the 'X-Ratelimit-Remaining' header value
-            $this->xRateLimitRemaining =
-                (isset($headers['X-Ratelimit-Remaining'])) ? trim($headers['X-Ratelimit-Remaining']) : '';
-
-            if ( ! $jsonData) {
-                throw new CurlException(curl_error($ch));
-            }
-
-            $this->httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-            curl_close($ch);
-
-            $stdObject = json_decode($jsonData);
-            if (isset($stdObject->code) and isset($stdObject->error_type)) {
-                throw new InstagramException($stdObject->error_type . ': ' . $stdObject->error_message, $stdObject->code
-                );
-            }
-
-            return $stdObject;
-        }
-
-        throw new CurlException(curl_error($ch));
+        return $this->get('users/search', $params);
     }
 
     /**
@@ -340,60 +240,6 @@ class Instagram
     }
 
     /**
-     * Sign header by using endpoint, parameters and the API secret.
-     *
-     * @param string
-     * @param string
-     * @param array
-     *
-     * @return string The signature
-     */
-    private function getHeaderSignature($endpoint, $authMethod, $params)
-    {
-        if ( ! is_array($params)) {
-            $params = [];
-        }
-        if ($authMethod) {
-            list($key, $value) = $authMethod;
-            $params[$key] = $value;
-        }
-
-        $baseString = '/' . $endpoint;
-
-        ksort($params);
-        foreach ($params as $key => $value) {
-            $baseString .= '|' . $key . '=' . $value;
-        }
-        $signature = hash_hmac('sha256', $baseString, $this->apiSecret, false);
-
-        return $signature;
-    }
-
-    /**
-     * Read and process response header content.
-     *
-     * @param array
-     *
-     * @return array
-     */
-    private function processHeaders($headerContent)
-    {
-        $headers = [];
-
-        foreach (explode("\r\n", $headerContent) as $i => $line) {
-            if ($i === 0) {
-                $headers['http_code'] = $line;
-                continue;
-            }
-
-            list($key, $value) = explode(':', $line);
-            $headers[$key] = $value;
-        }
-
-        return $headers;
-    }
-
-    /**
      * Get user info.
      *
      * @param int $id Instagram user ID
@@ -402,7 +248,7 @@ class Instagram
      */
     public function getUser($id = 0)
     {
-        return $this->makeCall('users/' . $id);
+        return $this->get('users/' . $id);
     }
 
     /**
@@ -415,7 +261,7 @@ class Instagram
      */
     public function getUserFeed($params = [])
     {
-        return $this->makeCall('users/self/feed', $params);
+        return $this->get('users/self/feed', $params);
     }
 
     /**
@@ -429,7 +275,7 @@ class Instagram
      */
     public function getUserMedia($id = 'self', $params = [])
     {
-        return $this->makeCall('users/' . $id . '/media/recent', $params);
+        return $this->get('users/' . $id . '/media/recent', $params);
     }
 
     /**
@@ -442,7 +288,7 @@ class Instagram
      */
     public function getUserLikes($params = [])
     {
-        return $this->makeCall('users/self/media/liked', $params);
+        return $this->get('users/self/media/liked', $params);
     }
 
     /**
@@ -456,7 +302,7 @@ class Instagram
      */
     public function getUserFollows($id = 'self', $params = [])
     {
-        return $this->makeCall('users/' . $id . '/follows', $params);
+        return $this->get('users/' . $id . '/follows', $params);
     }
 
     /**
@@ -470,7 +316,7 @@ class Instagram
      */
     public function getUserFollower($id = 'self', $params = [])
     {
-        return $this->makeCall('users/' . $id . '/followed-by', $params);
+        return $this->get('users/' . $id . '/followed-by', $params);
     }
 
     /**
@@ -482,7 +328,7 @@ class Instagram
      */
     public function getUserRelationship($id)
     {
-        return $this->makeCall('users/' . $id . '/relationship');
+        return $this->get('users/' . $id . '/relationship');
     }
 
     /**
@@ -508,7 +354,7 @@ class Instagram
     public function modifyRelationship($action, $user)
     {
         if (in_array($action, $this->actions) and isset($user)) {
-            return $this->makeCall('users/' . $user . '/relationship', ['action' => $action], 'POST');
+            return $this->post('users/' . $user . '/relationship', ['action' => $action]);
         }
 
         throw new InstagramException('Error: modifyRelationship() | This method requires an action command and the target user id.'
@@ -528,7 +374,7 @@ class Instagram
      */
     public function searchMedia($lat, $lng, $distance = 1000, $min_timestamp = null, $max_timestamp = null)
     {
-        return $this->makeCall('media/search', compact('lat', 'lng', 'distance', 'min_timestamp', 'max_timestamp'));
+        return $this->get('media/search', compact('lat', 'lng', 'distance', 'min_timestamp', 'max_timestamp'));
     }
 
     /**
@@ -541,9 +387,9 @@ class Instagram
     public function getMedia($id)
     {
         if (is_numeric($id)) {
-            return $this->makeCall('media/' . $id);
+            return $this->get('media/' . $id);
         } else {
-            return $this->makeCall('media/shortcode/' . $id);
+            return $this->get('media/shortcode/' . $id);
         }
     }
 
@@ -556,7 +402,7 @@ class Instagram
      */
     public function searchTags($name)
     {
-        return $this->makeCall('tags/search', ['q' => $name]);
+        return $this->get('tags/search', ['q' => $name]);
     }
 
     /**
@@ -568,7 +414,7 @@ class Instagram
      */
     public function getTag($name)
     {
-        return $this->makeCall('tags/' . $name);
+        return $this->get('tags/' . $name);
     }
 
     /**
@@ -581,7 +427,7 @@ class Instagram
      */
     public function getTagMedia($name, $params = [])
     {
-        return $this->makeCall('tags/' . $name . '/media/recent', $params);
+        return $this->get('tags/' . $name . '/media/recent', $params);
     }
 
     /**
@@ -593,7 +439,7 @@ class Instagram
      */
     public function getMediaLikes($id)
     {
-        return $this->makeCall('media/' . $id . '/likes');
+        return $this->get('media/' . $id . '/likes');
     }
 
     /**
@@ -605,7 +451,7 @@ class Instagram
      */
     public function getMediaComments($id)
     {
-        return $this->makeCall('media/' . $id . '/comments');
+        return $this->get('media/' . $id . '/comments');
     }
 
     /**
@@ -618,7 +464,7 @@ class Instagram
      */
     public function addMediaComment($id, $text)
     {
-        return $this->makeCall('media/' . $id . '/comments', ['text' => $text], 'POST');
+        return $this->post('media/' . $id . '/comments', ['text' => $text]);
     }
 
     /**
@@ -631,7 +477,7 @@ class Instagram
      */
     public function deleteMediaComment($id, $commentID)
     {
-        return $this->makeCall('media/' . $id . '/comments/' . $commentID, null, 'DELETE');
+        return $this->delete('media/' . $id . '/comments/' . $commentID);
     }
 
     /**
@@ -643,7 +489,7 @@ class Instagram
      */
     public function likeMedia($id)
     {
-        return $this->makeCall('media/' . $id . '/likes', null, 'POST');
+        return $this->post('media/' . $id . '/likes', null);
     }
 
     /**
@@ -655,7 +501,7 @@ class Instagram
      */
     public function deleteLikedMedia($id)
     {
-        return $this->makeCall('media/' . $id . '/likes', null, 'DELETE');
+        return $this->delete('media/' . $id . '/likes');
     }
 
     /**
@@ -667,7 +513,7 @@ class Instagram
      */
     public function getLocation($id)
     {
-        return $this->makeCall('locations/' . $id);
+        return $this->get('locations/' . $id);
     }
 
     /**
@@ -679,7 +525,7 @@ class Instagram
      */
     public function getLocationMedia($id)
     {
-        return $this->makeCall('locations/' . $id . '/media/recent');
+        return $this->get('locations/' . $id . '/media/recent');
     }
 
     /**
@@ -693,7 +539,7 @@ class Instagram
      */
     public function searchLocation($lat, $lng, $distance = 1000)
     {
-        return $this->makeCall('locations/search', ['lat' => $lat, 'lng' => $lng, 'distance' => $distance]);
+        return $this->get('locations/search', ['lat' => $lat, 'lng' => $lng, 'distance' => $distance]);
     }
 
     /**
@@ -722,26 +568,21 @@ class Instagram
 
             $function = str_replace(self::API_URL, '', $apiCall[0]);
 
-            $auth = (strpos($apiCall[1], 'access_token') !== false);
-
             if (isset($obj->pagination->next_max_id)) {
-                return $this->makeCall($function,
-                    $auth,
+                return $this->get($function,
                     ['max_id' => $obj->pagination->next_max_id, 'count' => $limit]
                 );
             } elseif (isset($obj->pagination->next_max_like_id)) {
-                return $this->makeCall($function,
-                    $auth,
+                return $this->get($function,
                     ['max_like_id' => $obj->pagination->next_max_like_id, 'count' => $limit]
                 );
             } elseif (isset($obj->pagination->max_tag_id)) {
-                return $this->makeCall($function,
-                    $auth,
+                return $this->get($function,
                     ['max_tag_id' => $obj->pagination->max_tag_id, 'count' => $limit]
                 );
             }
 
-            return $this->makeCall($function, $auth, ['cursor' => $obj->pagination->next_cursor, 'count' => $limit]);
+            return $this->get($function, ['cursor' => $obj->pagination->next_cursor, 'count' => $limit]);
         }
 
         throw new PaginationException();
@@ -793,6 +634,183 @@ class Instagram
     }
 
     /**
+     * Enforce Signed Header.
+     *
+     * @param bool $signedHeader
+     *
+     * @return void
+     */
+    public function setSignedHeader($signedHeader)
+    {
+        $this->signedHeader = $signedHeader;
+    }
+
+    /**
+     * Last API Call HTTP Status Code Getter.
+     *
+     * @return int
+     */
+    public function getHttpCode()
+    {
+        return $this->httpCode;
+    }
+
+    /**
+     * Set cURL retries
+     *
+     * @param int $curlRetries
+     *
+     * @return void
+     */
+    public function setCurlRetries($curlRetries)
+    {
+        $this->curlRetries = intval($curlRetries);
+    }
+
+    private function get($function, $params = [])
+    {
+        return $this->makeCall($function, $params, 'GET');
+    }
+
+    private function post($function, $params = [])
+    {
+        return $this->makeCall($function, $params, 'POST');
+    }
+
+    private function delete($function, $params = [])
+    {
+        return $this->makeCall($function, $params, 'DELETE');
+    }
+
+    /**
+     * The call operator.
+     *
+     * @param string $function API resource path
+     * @param array  $params   Request parameters
+     * @param string $method   Request type GET|POST
+     *
+     * @return mixed
+     * @throws CurlException
+     * @throws InstagramException
+     */
+    private function makeCall($function, $params = null, $method = 'GET')
+    {
+        $ApiCallQuery = [];
+
+        // All calls needs an authenticated user
+        if ( ! isset($this->accessToken)) {
+            throw new InstagramException("Error: makeCall() | $function - This method requires an authenticated users access token."
+            );
+        }
+        $authMethod = ['access_token' => $this->getAccessToken()];
+
+        $ApiCallQuery += $authMethod;
+
+        $paramsQuery = null;
+        if (isset($params) and is_array($params)) {
+            $ApiCallQuery += $params;
+        }
+
+        if ($this->signedHeader) {
+            $ApiCallQuery += ['sig' => $this->getHeaderSignature($function, $params)];
+        }
+
+        $apiCall = self::API_URL . $function . '?' . http_build_query($ApiCallQuery);
+
+        $connCount = 0;
+        do {
+            $connCount++;
+            $ch = $this->sendCurlRequest($apiCall, $method, $ApiCallQuery);
+
+            $jsonData = curl_exec($ch);
+        } while (curl_errno($ch) and $connCount <= $this->curlRetries);
+
+        if (curl_errno($ch) === CURLE_OK) {
+
+            $this->httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            // split header from JSON data
+            // and assign each to a variable
+            list($headerContent, $jsonData) = explode("\r\n\r\n", $jsonData, 2);
+
+            // convert header content into an array
+            $headers = $this->processHeaders($headerContent);
+
+            // get the 'X-Ratelimit-Remaining' header value
+            $this->xRateLimitRemaining =
+                (isset($headers['X-Ratelimit-Remaining'])) ? trim($headers['X-Ratelimit-Remaining']) : '';
+
+            if ( ! $jsonData) {
+                throw new CurlException(curl_error($ch));
+            }
+
+            $stdObject = json_decode($jsonData);
+            if (isset($stdObject->code) and isset($stdObject->error_type)) {
+                throw new InstagramException($stdObject->error_type . ': ' . $stdObject->error_message, $stdObject->code
+                );
+            }
+
+            return $stdObject;
+        }
+
+        throw new CurlException(curl_error($ch));
+    }
+
+    /**
+     * Sign header by using endpoint, parameters and the API secret.
+     *
+     * @param string $endpoint Request endpoint
+     * @param array  $params   Request params
+     *
+     * @return string The signature
+     */
+    private function getHeaderSignature($endpoint, $params)
+    {
+        if ( ! is_array($params)) {
+            $params = [];
+        }
+
+        if ($this->getAccessToken()) {
+            $params['access_token'] = $this->getAccessToken();
+        }
+
+        $baseString = '/' . $endpoint;
+
+        ksort($params);
+        foreach ($params as $key => $value) {
+            $baseString .= '|' . $key . '=' . $value;
+        }
+        $signature = hash_hmac('sha256', $baseString, $this->apiSecret, false);
+
+        return $signature;
+    }
+
+    /**
+     * Read and process response header content.
+     *
+     * @param array
+     *
+     * @return array
+     */
+    private function processHeaders($headerContent)
+    {
+        $headers = [];
+
+        foreach (explode("\r\n", $headerContent) as $i => $line) {
+            if ($i === 0) {
+                $headers['http_code'] = $line;
+                continue;
+            }
+
+            list($key, $value) = explode(':', $line);
+            $headers[$key] = $value;
+        }
+
+        return $headers;
+    }
+
+    /**
      * The OAuth call operator.
      *
      * @param array $apiData The post API data
@@ -809,14 +827,8 @@ class Instagram
         do {
             $connCount++;
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $apiHost);
-            curl_setopt($ch, CURLOPT_POST, count($apiData));
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($apiData));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+            $ch = $this->sendCurlRequest($apiData, 'POST', $apiHost);
+
             $jsonData = curl_exec($ch);
         } while (curl_errno($ch) and $connCount <= $this->curlRetries);
 
@@ -839,24 +851,35 @@ class Instagram
     }
 
     /**
-     * Enforce Signed Header.
+     * Generate a cURL request and send it
      *
-     * @param bool $signedHeader
+     * @param $apiCall
+     * @param $method
+     * @param $ApiCallQuery
      *
-     * @return void
+     * @return resource a cURL handle on success, false on errors.
      */
-    public function setSignedHeader($signedHeader)
+    private function sendCurlRequest($apiCall, $method, $ApiCallQuery)
     {
-        $this->signedHeader = $signedHeader;
-    }
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $apiCall);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_HEADER, true);
 
-    /**
-     * Last API Call HTTP Status Code Getter.
-     *
-     * @return int
-     */
-    public function getHttpCode()
-    {
-        return $this->httpCode;
+        switch ($method) {
+            case 'POST':
+                curl_setopt($ch, CURLOPT_POST, count($ApiCallQuery));
+                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($ApiCallQuery));
+                break;
+            case 'DELETE':
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+                break;
+        }
+
+        return $ch;
     }
 }
