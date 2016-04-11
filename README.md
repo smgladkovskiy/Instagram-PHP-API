@@ -1,4 +1,13 @@
-# ![Image](example/assets/instagram.png) Instagram PHP API V2
+# ![Image](example/assets/instagram.png) Instagram PHP API V3
+
+---
+
+**Caution:** this is the development branch for the upcoming version 3
+
+[![Latest Stable Version](https://poser.pugx.org/cosenary/instagram/v/stable.svg)](https://packagist.org/packages/cosenary/instagram)
+[![Latest Unstable Version](https://poser.pugx.org/cosenary/instagram/v/unstable.svg)](https://packagist.org/packages/cosenary/instagram)
+
+---
 
 > **Note:** On the 17 Nov 2015 [Instagram](http://developers.instagram.com/post/133424514006/instagram-platform-update) made [changes to their API ](https://instagram.com/developer/changelog/). Apps created before Nov 17, 2015 wont be affected until Jun 2016. Apps created on or after Nov 17 2015 will require to use their updated API. Please note that this library doesn't yet support their new updates. For more information, please see [#182](https://github.com/cosenary/Instagram-PHP-API/issues/182).
 
@@ -201,6 +210,7 @@ Please note that the `modifyRelationship()` method requires the `relationships` 
 
 - `getMedia($id)`
 	- authenticated users receive the info, whether the queried media is liked
+- `getMediaShortcode($shortcode)`
 - `getPopularMedia()`
 - `searchMedia($lat, $lng, <$distance>, <$minTimestamp>, <$maxTimestamp>)`
 	- `$lat` and `$lng` are coordinates and have to be floats like: `48.145441892290336`,`11.568603515625`
@@ -349,7 +359,7 @@ Iteration with `do-while` loop.
 
 This example project, located in the `example/` folder, helps you to get started.
 The code is well documented and takes you through all required steps of the OAuth2 process.
-Credit for the awesome Instagram icons goes to [Ricardo de Zoete Pro](http://dribbble.com/RZDESIGN).
+Credit for the awesome Instagram icons goes to [mauroxanish](http://mauroxanish.deviantart.com).
 
 #### More examples and tutorials:
 

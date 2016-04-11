@@ -14,7 +14,7 @@ use MetzWeb\Instagram\Exceptions\PaginationException;
  * @author    Sergey Gladkovskiy <smgladkovskiy@gmail.com>
  * @since     30.10.2011
  * @copyright Christian Metz - MetzWeb Networks 2011-2014
- * @version   3.0
+ * @version   3.0-alfa
  * @license   BSD http://www.opensource.org/licenses/bsd-license.php
  */
 class Instagram
