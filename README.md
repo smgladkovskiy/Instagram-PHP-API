@@ -1,4 +1,4 @@
-# ![Image](example/assets/instagram.png) Instagram PHP API V3
+# ![Image](assets/instagram.png) Instagram PHP API V3
 
 ---
 
@@ -23,7 +23,7 @@ A PHP wrapper for the Instagram API. Feedback or bug reports are appreciated.
 ## Requirements
 
 - PHP 5.3 or higher
-- cURL
+- Guzzle
 - Registered Instagram App
 
 ## Get started
@@ -35,8 +35,6 @@ To use the Instagram API you have to register yourself as a developer at the [In
 Please note that Instagram mainly refers to »Clients« instead of »Apps«. So »Client ID« and »Client Secret« are the same as »App Key« and »App Secret«.
 
 ---
-
-> A good place to get started is the [example project](example/README.md).
 
 ### Installation
 
@@ -52,9 +50,9 @@ $ composer require cosenary/instagram
 use MetzWeb\Instagram\Instagram;
 
 $instagram = new Instagram(array(
-	'apiKey'      => 'YOUR_APP_KEY',
-	'apiSecret'   => 'YOUR_APP_SECRET',
-	'apiCallback' => 'YOUR_APP_CALLBACK'
+    'apiKey'      => 'YOUR_APP_KEY',
+    'apiSecret'   => 'YOUR_APP_SECRET',
+    'apiCallback' => 'YOUR_APP_CALLBACK'
 ));
 
 echo "<a href='{$instagram->getLoginUrl()}'>Login with Instagram</a>";
@@ -97,9 +95,9 @@ echo '<pre>';
 
 ```php
 new Instagram(array(
-	'apiKey'      => 'YOUR_APP_KEY',
-	'apiSecret'   => 'YOUR_APP_SECRET',
-	'apiCallback' => 'YOUR_APP_CALLBACK'
+    'apiKey'      => 'YOUR_APP_KEY',
+    'apiSecret'   => 'YOUR_APP_SECRET',
+    'apiCallback' => 'YOUR_APP_CALLBACK'
 ));
 ```
 
@@ -115,39 +113,39 @@ new Instagram('YOUR_APP_KEY');
 
 ```php
 getLoginUrl(array(
-	'basic',
-	'likes'
+    'basic',
+    'likes'
 ));
 ```
 
 **Optional scope parameters:**
 
 <table>
-	<tr>
-		<th>Scope</th>
-		<th>Legend</th>
-		<th>Methods</th>
-	</tr>
-	<tr>
-		<td><code>basic</code></td>
-		<td>to use all user related methods [default]</td>
-		<td><code>getUser()</code>, <code>getUserFeed()</code>, <code>getUserFollower()</code> etc.</td>
-	</tr>
-	<tr>
-		<td><code>relationships</code></td>
-		<td>to follow and unfollow users</td>
-		<td><code>modifyRelationship()</code></td>
-	</tr>
-	<tr>
-		<td><code>likes</code></td>
-		<td>to like and unlike items</td>
-		<td><code>getMediaLikes()</code>, <code>likeMedia()</code>, <code>deleteLikedMedia()</code></td>
-	</tr>
-	<tr>
-		<td><code>comments</code></td>
-		<td>to create or delete comments</td>
-		<td><code>getMediaComments()</code>, <code>addMediaComment()</code>, <code>deleteMediaComment()</code></td>
-	</tr>
+    <tr>
+        <th>Scope</th>
+        <th>Legend</th>
+        <th>Methods</th>
+    </tr>
+    <tr>
+        <td><code>basic</code></td>
+        <td>to use all user related methods [default]</td>
+        <td><code>getUser()</code>, <code>getUserFeed()</code>, <code>getUserFollower()</code> etc.</td>
+    </tr>
+    <tr>
+        <td><code>relationships</code></td>
+        <td>to follow and unfollow users</td>
+        <td><code>modifyRelationship()</code></td>
+    </tr>
+    <tr>
+        <td><code>likes</code></td>
+        <td>to like and unlike items</td>
+        <td><code>getMediaLikes()</code>, <code>likeMedia()</code>, <code>deleteLikedMedia()</code></td>
+    </tr>
+    <tr>
+        <td><code>comments</code></td>
+        <td>to create or delete comments</td>
+        <td><code>getMediaComments()</code>, <code>addMediaComment()</code>, <code>deleteMediaComment()</code></td>
+    </tr>
 </table>
 
 ### Get OAuth token
@@ -176,7 +174,7 @@ getLoginUrl(array(
 - `getUserLikes(<$limit>)`
 - `getUserFeed(<$limit>)`
 - `getUserMedia(<$id>, <$limit>)`
-	- if an `$id` isn't defined or equals `'self'`, it returns the media of the logged in user
+    - if an `$id` isn't defined or equals `'self'`, it returns the media of the logged in user
 
 > [Sample responses of the User Endpoints.](http://instagram.com/developer/endpoints/users/)
 
@@ -188,8 +186,8 @@ getLoginUrl(array(
 - `getUserFollower($id, <$limit>)`
 - `getUserRelationship($id)`
 - `modifyRelationship($action, $user)`
-	- `$action` : Action command (follow / unfollow / block / unblock / approve / deny)
-	- `$user` : Target user id
+    - `$action` : Action command (follow / unfollow / block / unblock / approve / deny)
+    - `$user` : Target user id
 
 ```php
 // Follow the user with the ID 1574083
@@ -209,14 +207,14 @@ Please note that the `modifyRelationship()` method requires the `relationships` 
 **Public methods**
 
 - `getMedia($id)`
-	- authenticated users receive the info, whether the queried media is liked
+    - authenticated users receive the info, whether the queried media is liked
 - `getMediaShortcode($shortcode)`
 - `getPopularMedia()`
 - `searchMedia($lat, $lng, <$distance>, <$minTimestamp>, <$maxTimestamp>)`
-	- `$lat` and `$lng` are coordinates and have to be floats like: `48.145441892290336`,`11.568603515625`
-	- `$distance` : Radial distance in meter (default is 1km = 1000, max. is 5km = 5000)
-	- `$minTimestamp` : All media returned will be taken *later* than this timestamp (default: 5 days ago)
-	- `$maxTimestamp` : All media returned will be taken *earlier* than this timestamp (default: now)
+    - `$lat` and `$lng` are coordinates and have to be floats like: `48.145441892290336`,`11.568603515625`
+    - `$distance` : Radial distance in meter (default is 1km = 1000, max. is 5km = 5000)
+    - `$minTimestamp` : All media returned will be taken *later* than this timestamp (default: 5 days ago)
+    - `$maxTimestamp` : All media returned will be taken *earlier* than this timestamp (default: now)
 
 > [Sample responses of the Media Endpoints.](http://instagram.com/developer/endpoints/media/)
 
@@ -229,9 +227,9 @@ Please note that the `modifyRelationship()` method requires the `relationships` 
 **Authenticated methods**
 
 - `addMediaComment($id, $text)`
-	- **restricted access:** please email `apidevelopers[at]instagram.com` for access
+    - **restricted access:** please email `apidevelopers[at]instagram.com` for access
 - `deleteMediaComment($id, $commentID)`
-	- the comment must be authored by the authenticated user
+    - the comment must be authored by the authenticated user
 
 ---
 
@@ -259,7 +257,6 @@ Please note that the authenticated methods require the `comments` [scope](#get-l
 - `likeMedia($id)`
 - `deleteLikedMedia($id)`
 
-> How to like a Media: [Example usage](https://gist.github.com/3287237)
 > [Sample responses of the Likes Endpoints.](http://instagram.com/developer/endpoints/likes/)
 
 All `<...>` parameters are optional. If the limit is undefined, all available results will be returned.
@@ -267,8 +264,6 @@ All `<...>` parameters are optional. If the limit is undefined, all available re
 ## Instagram videos
 
 Instagram entries are marked with a `type` attribute (`image` or `video`), that allows you to identify videos.
-
-An example of how to embed Instagram videos by using [Video.js](http://www.videojs.com), can be found in the `/example` folder.
 
 ---
 
@@ -309,57 +304,49 @@ Iteration with `do-while` loop.
 ## Samples for redirect URLs
 
 <table>
-	<tr>
-		<th>Registered Redirect URI</th>
-		<th>Redirect URI sent to /authorize</th>
-		<th>Valid?</th>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/</td>
-		<td>http://yourcallback.com/</td>
-		<td>yes</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/</td>
-		<td>http://yourcallback.com/?this=that</td>
-		<td>yes</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/?this=that</td>
-		<td>http://yourcallback.com/</td>
-		<td>no</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/?this=that</td>
-		<td>http://yourcallback.com/?this=that&another=true</td>
-		<td>yes</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/?this=that</td>
-		<td>http://yourcallback.com/?another=true&this=that</td>
-		<td>no</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/callback</td>
-		<td>http://yourcallback.com/</td>
-		<td>no</td>
-	</tr>
-	<tr>
-		<td>http://yourcallback.com/callback</td>
-		<td>http://yourcallback.com/callback/?type=mobile</td>
-		<td>yes</td>
-	</tr>
+    <tr>
+        <th>Registered Redirect URI</th>
+        <th>Redirect URI sent to /authorize</th>
+        <th>Valid?</th>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/</td>
+        <td>http://yourcallback.com/</td>
+        <td>yes</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/</td>
+        <td>http://yourcallback.com/?this=that</td>
+        <td>yes</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/?this=that</td>
+        <td>http://yourcallback.com/</td>
+        <td>no</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/?this=that</td>
+        <td>http://yourcallback.com/?this=that&another=true</td>
+        <td>yes</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/?this=that</td>
+        <td>http://yourcallback.com/?another=true&this=that</td>
+        <td>no</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/callback</td>
+        <td>http://yourcallback.com/</td>
+        <td>no</td>
+    </tr>
+    <tr>
+        <td>http://yourcallback.com/callback</td>
+        <td>http://yourcallback.com/callback/?type=mobile</td>
+        <td>yes</td>
+    </tr>
 </table>
 
 > If you need further information about an endpoint, take a look at the [Instagram API docs](http://instagram.com/developer/authentication/).
-
-## Example App
-
-![Image](http://cl.ly/image/221T1g3w3u2J/preview.png)
-
-This example project, located in the `example/` folder, helps you to get started.
-The code is well documented and takes you through all required steps of the OAuth2 process.
-Credit for the awesome Instagram icons goes to [mauroxanish](http://mauroxanish.deviantart.com).
 
 #### More examples and tutorials:
 
