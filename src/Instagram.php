@@ -1,6 +1,6 @@
 <?php namespace MetzWeb\Instagram;
 
-use MetzWeb\Instagram\Exceptions\CurlException;
+use GuzzleHttp\Client;
 use MetzWeb\Instagram\Exceptions\InstagramException;
 use MetzWeb\Instagram\Exceptions\PaginationException;
 
@@ -11,9 +11,10 @@ use MetzWeb\Instagram\Exceptions\PaginationException;
  * Class Documentation: https://github.com/cosenary/Instagram-PHP-API
  *
  * @author    Christian Metz
+ * @author    Sergey Gladkovskiy <smgladkovskiy@gmail.com>
  * @since     30.10.2011
  * @copyright Christian Metz - MetzWeb Networks 2011-2014
- * @version   2.2
+ * @version   3.0
  * @license   BSD http://www.opensource.org/licenses/bsd-license.php
  */
 class Instagram
@@ -98,11 +99,11 @@ class Instagram
     private $xRateLimitRemaining;
 
     /**
-     * How many connection attempts are made before giving up?
+     * Headers array from response
      *
-     * @var int
+     * @var array
      */
-    private $curlRetries = 5;
+    private $headers = [];
 
     /**
      * Default constructor.
@@ -118,10 +119,6 @@ class Instagram
             $this->setApiKey($config['apiKey']);
             $this->setApiSecret($config['apiSecret']);
             $this->setApiCallback($config['apiCallback']);
-
-            if ( ! empty($config['curlRetries']) and is_int($config['curlRetries'])) {
-                $this->curlRetries = $config['curlRetries'];
-            }
         } else {
             throw new InstagramException('Error: __construct() - Configuration data is missing.');
         }
@@ -146,13 +143,12 @@ class Instagram
                 'response_type' => 'code'
             ];
 
-            $url = self::API_OAUTH_URL . '?' . http_build_query($queryData);
+            $url = self::API_OAUTH_URL . '?' . $this->buildQueryParams($queryData);
 
             return $url;
         }
 
-        throw new InstagramException("Error: getLoginUrl() - The parameter isn't an array or invalid scope permissions used."
-        );
+        throw new InstagramException("Error: getLoginUrl() - The parameter isn't an array or invalid scope permissions used.");
     }
 
     /**
@@ -357,8 +353,7 @@ class Instagram
             return $this->post('users/' . $user . '/relationship', ['action' => $action]);
         }
 
-        throw new InstagramException('Error: modifyRelationship() | This method requires an action command and the target user id.'
-        );
+        throw new InstagramException('Error: modifyRelationship() | This method requires an action command and the target user id.');
     }
 
     /**
@@ -549,7 +544,6 @@ class Instagram
      * @param int    $limit Limit of returned results
      *
      * @return mixed
-     * @throws CurlException
      * @throws InstagramException
      * @throws PaginationException
      */
@@ -569,46 +563,39 @@ class Instagram
             $function = str_replace(self::API_URL, '', $apiCall[0]);
 
             if (isset($obj->pagination->next_max_id)) {
-                return $this->get($function,
-                    ['max_id' => $obj->pagination->next_max_id, 'count' => $limit]
-                );
+                return $this->get($function, ['max_id' => $obj->pagination->next_max_id, 'count' => $limit]);
             } elseif (isset($obj->pagination->next_max_like_id)) {
-                return $this->get($function,
-                    ['max_like_id' => $obj->pagination->next_max_like_id, 'count' => $limit]
-                );
+                return $this->get($function, ['max_like_id' => $obj->pagination->next_max_like_id, 'count' => $limit]);
             } elseif (isset($obj->pagination->max_tag_id)) {
-                return $this->get($function,
-                    ['max_tag_id' => $obj->pagination->max_tag_id, 'count' => $limit]
-                );
+                return $this->get($function, ['max_tag_id' => $obj->pagination->max_tag_id, 'count' => $limit]);
             }
 
             return $this->get($function, ['cursor' => $obj->pagination->next_cursor, 'count' => $limit]);
         }
 
-        throw new PaginationException();
+        throw new PaginationException;
     }
 
     /**
      * Get the OAuth data of a user by the returned callback code.
      *
-     * @param string $code  OAuth2 code variable (after a successful login)
-     * @param bool   $token If it's true, only the access token will be returned
+     * @param string $code OAuth2 code variable (after a successful login)
      *
      * @return mixed
      */
-    public function getOAuthToken($code, $token = false)
+    public function getOAuthToken($code)
     {
         $apiData = [
-            'grant_type'    => 'authorization_code',
             'client_id'     => $this->getApiKey(),
             'client_secret' => $this->getApiSecret(),
             'redirect_uri'  => $this->getApiCallback(),
+            'grant_type'    => 'authorization_code',
             'code'          => $code
         ];
 
-        $result = $this->makeOAuthCall($apiData);
+        $response = $this->sendRequest(self::API_OAUTH_TOKEN_URL, 'POST', $apiData);
 
-        return ! $token ? $result : $result->access_token;
+        return $response->access_token;
     }
 
     /**
@@ -655,21 +642,9 @@ class Instagram
         return $this->httpCode;
     }
 
-    /**
-     * Set cURL retries
-     *
-     * @param int $curlRetries
-     *
-     * @return void
-     */
-    public function setCurlRetries($curlRetries)
-    {
-        $this->curlRetries = intval($curlRetries);
-    }
-
     private function get($function, $params = [])
     {
-        return $this->makeCall($function, $params, 'GET');
+        return $this->makeCall($function, $params);
     }
 
     private function post($function, $params = [])
@@ -690,71 +665,32 @@ class Instagram
      * @param string $method   Request type GET|POST
      *
      * @return mixed
-     * @throws CurlException
      * @throws InstagramException
      */
     private function makeCall($function, $params = null, $method = 'GET')
     {
-        $ApiCallQuery = [];
-
         // All calls needs an authenticated user
         if ( ! isset($this->accessToken)) {
-            throw new InstagramException("Error: makeCall() | $function - This method requires an authenticated users access token."
-            );
+            throw new InstagramException("Error: makeCall() | $function - This method requires an authenticated users access token.");
         }
-        $authMethod = ['access_token' => $this->getAccessToken()];
 
-        $ApiCallQuery += $authMethod;
+        $apiCallQuery = ['access_token' => $this->getAccessToken()];
 
-        $paramsQuery = null;
         if (isset($params) and is_array($params)) {
-            $ApiCallQuery += $params;
+            $apiCallQuery += $params;
         }
 
         if ($this->signedHeader) {
-            $ApiCallQuery += ['sig' => $this->getHeaderSignature($function, $params)];
+            $apiCallQuery += ['sig' => $this->getHeaderSignature($function, $params)];
         }
 
-        $apiCall = self::API_URL . $function . '?' . http_build_query($ApiCallQuery);
+        $response = $this->sendRequest(self::API_URL . $function, $method, $apiCallQuery);
 
-        $connCount = 0;
-        do {
-            $connCount++;
-            $ch = $this->sendCurlRequest($apiCall, $method, $ApiCallQuery);
+        // get the 'X-Ratelimit-Remaining' header value
+        $this->xRateLimitRemaining =
+            (isset($this->headers['X-Ratelimit-Remaining'])) ? trim($this->headers['X-Ratelimit-Remaining'][0]) : '';
 
-            $jsonData = curl_exec($ch);
-        } while (curl_errno($ch) and $connCount <= $this->curlRetries);
-
-        if (curl_errno($ch) === CURLE_OK) {
-
-            $this->httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            // split header from JSON data
-            // and assign each to a variable
-            list($headerContent, $jsonData) = explode("\r\n\r\n", $jsonData, 2);
-
-            // convert header content into an array
-            $headers = $this->processHeaders($headerContent);
-
-            // get the 'X-Ratelimit-Remaining' header value
-            $this->xRateLimitRemaining =
-                (isset($headers['X-Ratelimit-Remaining'])) ? trim($headers['X-Ratelimit-Remaining']) : '';
-
-            if ( ! $jsonData) {
-                throw new CurlException(curl_error($ch));
-            }
-
-            $stdObject = json_decode($jsonData);
-            if (isset($stdObject->code) and isset($stdObject->error_type)) {
-                throw new InstagramException($stdObject->error_type . ': ' . $stdObject->error_message, $stdObject->code
-                );
-            }
-
-            return $stdObject;
-        }
-
-        throw new CurlException(curl_error($ch));
+        return $response;
     }
 
     /**
@@ -787,99 +723,60 @@ class Instagram
     }
 
     /**
-     * Read and process response header content.
+     * Prepare query params for request to Instagram api (it doesn't like encoded characters)
      *
-     * @param array
+     * @param $queryData
      *
-     * @return array
+     * @return string
      */
-    private function processHeaders($headerContent)
+    private function buildQueryParams($queryData)
     {
-        $headers = [];
-
-        foreach (explode("\r\n", $headerContent) as $i => $line) {
-            if ($i === 0) {
-                $headers['http_code'] = $line;
-                continue;
+        $query = [];
+        foreach ($queryData as $key => $value) {
+            if (is_array($value)) {
+                $query[] = $this->buildQueryParams($value);
+            } else {
+                $query[] = "$key=$value";
             }
-
-            list($key, $value) = explode(':', $line);
-            $headers[$key] = $value;
         }
 
-        return $headers;
+        return implode('&', $query);
     }
 
     /**
-     * The OAuth call operator.
+     * Make Guzzle request
      *
-     * @param array $apiData The post API data
+     * @param $host
+     * @param $method
+     * @param $requestData
      *
      * @return mixed
-     * @throws CurlException
      * @throws InstagramException
      */
-    private function makeOAuthCall($apiData)
+    private function sendRequest($host, $method, $requestData)
     {
-        $apiHost = self::API_OAUTH_TOKEN_URL;
+        $guzzle_config = [
+            'debug'      => false,
+            'exceptions' => false
+        ];
 
-        $connCount = 0;
-        do {
-            $connCount++;
-
-            $ch = $this->sendCurlRequest($apiData, 'POST', $apiHost);
-
-            $jsonData = curl_exec($ch);
-        } while (curl_errno($ch) and $connCount <= $this->curlRetries);
-
-        if (curl_errno($ch) === CURLE_OK) {
-            curl_close($ch);
-
-            if ( ! $jsonData) {
-                throw new CurlException(curl_error($ch));
-            }
-
-            $stdObject = json_decode($jsonData);
-            if (isset($stdObject->code) and isset($stdObject->error_type)) {
-                throw new InstagramException($stdObject->error_type . ': ' . $stdObject->error_message, $stdObject->code
-                );
-            }
-
-            return $stdObject;
-        }
-        throw new CurlException(curl_error($ch));
-    }
-
-    /**
-     * Generate a cURL request and send it
-     *
-     * @param $apiCall
-     * @param $method
-     * @param $ApiCallQuery
-     *
-     * @return resource a cURL handle on success, false on errors.
-     */
-    private function sendCurlRequest($apiCall, $method, $ApiCallQuery)
-    {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $apiCall);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_HEADER, true);
-
-        switch ($method) {
-            case 'POST':
-                curl_setopt($ch, CURLOPT_POST, count($ApiCallQuery));
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($ApiCallQuery));
-                break;
-            case 'DELETE':
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
-                break;
+        if ($method == 'POST') {
+            $requestData = ['form_params' => $requestData];
+        } else {
+            $requestData = ['query' => $requestData];
         }
 
-        return $ch;
+        $client = new Client($guzzle_config);
+
+        $response       = $client->request($method, $host, $requestData);
+        $this->httpCode = $response->getStatusCode();
+        $this->headers  = $response->getHeaders();
+        $responseData   = json_decode($response->getBody()->getContents());
+
+        if (isset($response->error_type)) {
+            throw new InstagramException($response->error_type . ': ' . $response->error_message, $response->code);
+        }
+
+        return $responseData;
     }
 }

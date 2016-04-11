@@ -6,8 +6,8 @@ class PaginationException extends InstagramException
     /**
      * PaginationException constructor.
      */
-    public function __construct()
+    public function __construct($message = null)
     {
-        parent::__construct("Error: pagination() | This method doesn't support pagination.");
+        parent::__construct("Pagination error: " . $message);
     }
 }
